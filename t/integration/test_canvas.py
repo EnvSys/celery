@@ -876,6 +876,41 @@ class test_chord:
                    ) == 1
 
     @flaky
+    def test_generator(self, manager):
+        def assert_generator(file_name):
+            for i in range(3):
+                sleep(1)
+                if i == 2:
+                    with open(file_name) as file_handle:
+                        # ensures chord header generators tasks are processed incrementally #3021
+                        assert file_handle.readline() == '0\n', "Chord header was unrolled too early"
+                yield write_to_file_and_return_int.s(file_name, i)
+
+        with tempfile.NamedTemporaryFile(mode='w', delete=False) as tmp_file:
+            file_name = tmp_file.name
+            c = chord(assert_generator(file_name), tsum.s())
+            assert c().get(timeout=TIMEOUT) == 3
+
+    @flaky
+    def test_chain_in_chord_on_error(self, manager):
+        if not manager.app.conf.result_backend.startswith('redis'):
+            raise pytest.skip('Requires redis result backend.')
+
+        # Run the chord and wait for the error callback to finish.
+        c1 = chord(
+            header=[
+                add.s(1, 2),
+                add.s(3, 4),
+                chain(add.s(1, 2), fail.s(), add.s(3, 4))
+            ],
+            body=print_unicode.s('This should not be called').on_error(
+                chord_error.s()),
+        )
+        res = c1()
+        with pytest.raises(ExpectedException):
+            res.get(propagate=True, timeout=10)
+
+    @pytest.mark.flaky(reruns=5, reruns_delay=1, cause=is_retryable_exception)
     def test_parallel_chords(self, manager):
         try:
             manager.app.backend.ensure_chords_allowed()
