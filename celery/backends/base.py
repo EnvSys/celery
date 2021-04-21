@@ -41,8 +41,6 @@ from celery.utils.serialization import (create_exception_cls,
                                         raise_with_context)
 from celery.utils.time import get_exponential_backoff_interval
 
-import pprint
-
 __all__ = ('BaseBackend', 'KeyValueStoreBackend', 'DisabledBackend')
 
 EXCEPTION_ABLE_CODECS = frozenset({'pickle'})
